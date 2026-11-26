@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Инвентарь</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: white; padding: 15px 20px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; font-size: 14px;
+    }
+    .topbar a { color: #007bff; text-decoration: none; margin-left: 10px; }
+    .card {
+      background: white; padding: 25px; border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px;
+    }
+    h1, h2, h3 { color: #333; margin-bottom: 15px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 15px; color: #555; }
+    .message { padding:10px 15px; margin-bottom:15px; border-radius:5px; font-size:14px; }
+    .message.error   { background:#ffe0e0; color:#b30000; }
+    .message.success { background:#e0ffe0; color:#007700; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th,td { padding:8px; border-bottom:1px solid #eee; font-size:13px; vertical-align:top; text-align:left; }
+    th { background:#f8f9fa; }
+    input[type=text], textarea, select {
+      width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px;
+    }
+    textarea { min-height: 60px; resize:vertical; }
+    .btn { padding:6px 12px; border:none; border-radius:4px; cursor:pointer; font-size:13px; color:white; }
+    .btn-save   { background:#28a745; }
+    .btn-delete { background:#dc3545; }
+    .btn:hover  { opacity: 0.9; }
+    .form-row { display:flex; gap:8px; align-items:start; }
+    .form-row > div { flex:1; }
+    .muted { color:#999; font-size:12px; }
+    .category {
+      border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 15px;
+    }
+    .category-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="topbar">
+      <span><b>{{ session.username }}</b></span>
+      <span>
+        {% if 'admin' in session.roles or 'super_admin' in session.roles %}
+          <a href="/admin">🛠 Админ</a>
+        {% endif %}
+        <a href="/to">🚗 Управление ТО</a>
+        <a href="/faq">❓ FAQ</a>
+        <a href="/">← Главная</a>
+        <a href="/logout">Выйти</a>
+      </span>
+    </div>
+
+    {% if request.args.get('error') %}<p class="message error">⚠️ {{ request.args.get('error') }}</p>{% endif %}
+    {% if request.args.get('ok') %}<p class="message success">✅ Готово.</p>{% endif %}
+
+    <div class="card">
+      <h1>📦 Инвентарь</h1>
+      <p class="muted">Категории и поля настраиваются администратором.</p>
+    </div>
+
+    {% if can_edit %}
+      <!-- ===== СОЗДАТЬ КАТЕГОРИЮ ===== -->
+      <div class="card">
+        <h2>➕ Новая категория</h2>
+        <p class="muted" style="margin-bottom:10px;">
+          Каждое поле — с новой строки. Можно указать варианты ответов через <code>|</code> (например: <code>Состояние | рабочий, сломан, в ремонте</code>).
+        </p>
+        <form action="/inventory/category/add" method="POST">
+          <div class="form-row" style="margin-bottom:8px;">
+            <div>
+              <input type="text" name="name" placeholder="Название категории (например, Ноутбуки)" required>
+            </div>
+          </div>
+          <textarea name="fields" placeholder="Модель
+Серийный номер
+Процессор
+ОЗУ
+Дата покупки
+Состояние | рабочий, сломан, в ремонте" required></textarea>
+          <button type="submit" class="btn btn-save" style="margin-top:8px;">Создать</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <!-- ===== КАТЕГОРИИ ===== -->
+    {% for cat in categories %}
+      <div class="card">
+        <div class="category-header">
+          <h2>📁 {{ cat.name }} ({{ cat.rows|length }})</h2>
+          {% if can_edit %}
+            <form action="/inventory/category/delete/{{ cat.id }}" method="POST"
+                  onsubmit="return confirm('Удалить категорию и все записи?')">
+              <button type="submit" class="btn btn-delete">Удалить категорию</button>
+            </form>
+          {% endif %}
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              {% for f in cat.fields %}<th>{{ f.name }}</th>{% endfor %}
+              <th style="width:100px">Действие</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in cat.rows %}
+              <tr>
+                {% for f in cat.fields %}
+                  <td>{{ item.data.get(f.name, '') }}</td>
+                {% endfor %}
+                <td>
+                  <form action="/inventory/item/delete/{{ item.id }}" method="POST"
+                        onsubmit="return confirm('Удалить?')">
+                    <button type="submit" class="btn btn-delete">Удалить</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+
+            <!-- Форма добавления новой записи -->
+            <tr>
+              <form action="/inventory/item/add/{{ cat.id }}" method="POST">
+                {% for f in cat.fields %}
+                  <td>
+                    {% if f.options %}
+                      <!-- Если у поля есть варианты — выпадающий список -->
+                      <select name="f_{{ loop.index0 }}">
+                        <option value="">— выберите —</option>
+                        {% for opt in f.options %}
+                          <option value="{{ opt }}">{{ opt }}</option>
+                        {% endfor %}
+                      </select>
+                    {% else %}
+                      <!-- Иначе — обычное поле ввода -->
+                      <input type="text" name="f_{{ loop.index0 }}" placeholder="{{ f.name }}">
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td><button type="submit" class="btn btn-save">Добавить</button></td>
+              </form>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Дашборд ТО</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: white; padding: 15px 20px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; font-size: 14px;
+    }
+    .topbar a { color: #007bff; text-decoration: none; margin-left: 10px; }
+    .card {
+      background: white; padding: 25px; border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px;
+    }
+    h1 { color: #333; margin-bottom: 8px; }
+    h2 { color: #333; margin-bottom: 15px; font-size: 18px; }
+    .muted { color: #888; font-size: 13px; margin-bottom: 15px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: top; text-align: left; }
+    th { background: #f8f9fa; }
+    pre { white-space: pre-wrap; font-family: inherit; margin: 0; }
+    .pinned-mark { color: #dc3545; font-weight: bold; }
+    .live-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #28a745; margin-right: 6px; animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%{opacity:1;} 50%{opacity:.3;} 100%{opacity:1;} }
+
+    .message { padding: 10px 15px; margin-bottom: 15px; border-radius: 5px; font-size: 14px; }
+    .message.error   { background: #ffe0e0; color: #b30000; }
+    .message.success { background: #e0ffe0; color: #007700; }
+
+    input[type=text] {
+      padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+    }
+    .btn {
+      padding: 6px 12px; border: none; border-radius: 4px;
+      cursor: pointer; font-size: 13px; color: white;
+    }
+    .btn-save { background: #28a745; }
+    .btn-save:hover { background: #1e7e34; }
+    .btn-delete { background: #dc3545; padding: 3px 8px; font-size: 12px; }
+    .btn-delete:hover { background: #b02a37; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .add-col-form { display: flex; gap: 8px; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <span><span class="live-dot"></span>Автообновление каждые 10 сек</span>
+      <span>
+        <b>{{ session.username }}</b>
+        <a href="/">← Главная</a>
+        <a href="/logout">Выйти</a>
+      </span>
+    </div>
+
+    {% if request.args.get('error') %}<p class="message error">⚠️ {{ request.args.get('error') }}</p>{% endif %}
+    {% if request.args.get('ok') %}<p class="message success">✅ Готово.</p>{% endif %}
+
+    <!-- ===== ДОБАВИТЬ КОЛОНКУ ===== -->
+    {% if can_edit_columns %}
+      <div class="card">
+        <h2>➕ Добавить колонку</h2>
+        <p class="muted">Новая колонка появится в дашборде. Данные из журнала подтянутся автоматически, если там есть записи с таким названием.</p>
+        <form action="/dashboard/column/add" method="POST" class="add-col-form">
+          <input type="text" name="name" placeholder="Название колонки (например, Тормозные колодки)" required style="flex:1">
+          <button type="submit" class="btn btn-save">Добавить</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <!-- ===== ДАШБОРД ===== -->
+    <div class="card">
+      <h1>🚗 Дашборд ТО автомобиля</h1>
+      <p class="muted">
+        Для каждой позиции — последняя запись.
+        <span class="pinned-mark">*</span> — забинженные позиции (удалить нельзя).
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:35%">Название</th>
+            <th>Данные</th>
+            <th style="width:130px">Дата</th>
+            {% if can_edit_columns %}<th style="width:100px">Действие</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody id="dash-body">
+          {% for item in dashboard %}
+            <tr>
+              <td>
+                {% if item.pinned %}<span class="pinned-mark">*</span> {% endif %}
+                <b>{{ item.name }}</b>
+                {% if not item.pinned and item.created_by %}
+                  <br><span class="muted">добавил: {{ item.created_by }}</span>
+                {% endif %}
+              </td>
+              <td><pre>{{ item.data }}</pre></td>
+              <td class="muted">{{ item.date }}</td>
+              {% if can_edit_columns %}
+                <td>
+                  {% if item.pinned %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    <form action="/dashboard/column/delete/{{ item.id }}" method="POST"
+                          onsubmit="return confirm('Удалить колонку?')">
+                      <button type="submit" class="btn btn-delete">Удалить</button>
+                    </form>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+    async function refresh() {
+      try {
+        const r = await fetch('/dashboard/api');
+        if (!r.ok) return;
+        const d = await r.json();
+        document.getElementById('dash-body').innerHTML = d.dashboard.map(it => `
+          <tr>
+            <td>
+              ${it.pinned ? '<span class="pinned-mark">*</span> ' : ''}
+              <b>${escapeHtml(it.name)}</b>
+              ${!it.pinned && it.created_by ? '<br><span class="muted">добавил: ' + escapeHtml(it.created_by) + '</span>' : ''}
+            </td>
+            <td><pre>${escapeHtml(it.data)}</pre></td>
+            <td class="muted">${escapeHtml(it.date)}</td>
+            {% if can_edit_columns %}
+            <td>${it.pinned ? '<span class="muted">—</span>' :
+              `<form action="/dashboard/column/delete/${it.id}" method="POST" onsubmit="return confirm('Удалить колонку?')"><button type="submit" class="btn btn-delete">Удалить</button></form>`}</td>
+            {% endif %}
+          </tr>`).join('');
+      } catch (e) { console.warn(e); }
+    }
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

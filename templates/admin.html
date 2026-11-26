@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Админ-панель</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px 20px; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: white; padding: 15px 20px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; font-size: 14px;
+    }
+    .topbar a { color: #007bff; text-decoration: none; margin-left: 10px; }
+    .card {
+      background: white; padding: 25px; border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px;
+    }
+    h1, h2 { color: #333; margin-bottom: 18px; }
+    h2 { font-size: 18px; }
+    .live-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #28a745; margin-right: 6px; animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%{opacity:1;} 50%{opacity:.3;} 100%{opacity:1;} }
+
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
+    .info-item { background:#f8f9fa; padding:10px 14px; border-radius:6px; border-left:4px solid #007bff; }
+    .info-item .label { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+    .info-item .value { font-size:14px; color:#222; font-weight:bold; word-break:break-all; }
+
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:9px 8px; border-bottom:1px solid #eee; font-size:13.5px; vertical-align:top; text-align:left; }
+    th { background:#f8f9fa; font-weight:600; color:#555; }
+    tr:hover { background:#fafbfc; }
+
+    .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; margin-right:3px; }
+    .badge.super_admin { background:#6f42c1; color:white; }
+    .badge.admin       { background:#dc3545; color:white; }
+    .badge.moderator   { background:#ffc107; color:#333; }
+    .badge.user        { background:#e9ecef; color:#333; }
+    .badge.dashboard   { background:#17a2b8; color:white; }
+    .badge.inventory   { background:#28a745; color:white; }
+    .badge.faq_editor  { background:#fd7e14; color:white; }
+
+    input[type=text],input[type=date],textarea,select {
+      padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; font-family:inherit;
+    }
+    textarea { width:100%; min-height:60px; resize:vertical; }
+
+    .btn { padding:6px 12px; border:none; border-radius:4px; cursor:pointer; font-size:13px; color:white; }
+    .btn-save    { background:#28a745; }
+    .btn-save:hover { background:#1e7e34; }
+    .btn-delete  { background:#dc3545; }
+    .btn-delete:hover { background:#b02a37; }
+    .btn-undo    { background:#ff9800; padding:4px 10px; font-size:12px; }
+    .btn-undo:hover { background:#e68a00; }
+    .btn:disabled { background:#ccc; cursor:not-allowed; }
+
+    .message { padding:10px 15px; margin-bottom:15px; border-radius:5px; font-size:14px; }
+    .message.error   { background:#ffe0e0; color:#b30000; }
+    .message.success { background:#e0ffe0; color:#007700; }
+
+    .muted { color:#999; font-size:12px; }
+    .roles-form { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .roles-form label { font-size:12px; margin-right:4px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="topbar">
+      <span>
+        <span class="live-dot"></span>
+        <b>{{ session.username }}</b> · роли:
+        {% for r in session.roles %}<span class="badge {{ r }}">{{ r }}</span>{% endfor %}
+      </span>
+      <span>
+        <a href="/to">🚗 Управление ТО</a>
+        <a href="/inventory">📦 Инвентарь</a>
+        <a href="/faq">❓ FAQ</a>
+        <a href="/">← Главная</a>
+        <a href="/logout">Выйти</a>
+      </span>
+    </div>
+
+    {% if request.args.get('deleted') %}<p class="message success">✅ Пользователь удалён.</p>{% endif %}
+    {% if request.args.get('roles_changed') %}<p class="message success">✅ Роли обновлены.</p>{% endif %}
+    {% if request.args.get('undo_ok') %}<p class="message success">✅ Действие успешно отменено.</p>{% endif %}
+    {% if request.args.get('error') %}<p class="message error">⚠️ {{ request.args.get('error') }}</p>{% endif %}
+
+    <!-- ===== СЕРВЕР ===== -->
+    <div class="card">
+      <h1>🖥 Информация о сервере</h1>
+      <div class="info-grid">
+        <div class="info-item"><div class="label">ОС</div><div class="value">{{ info.os }}</div></div>
+        <div class="info-item"><div class="label">Python</div><div class="value">{{ info.python }}</div></div>
+        <div class="info-item"><div class="label">Flask</div><div class="value">{{ info.flask }}</div></div>
+        <div class="info-item"><div class="label">Хост</div><div class="value">{{ info.hostname }}</div></div>
+        <div class="info-item"><div class="label">Uptime</div><div class="value" id="v-uptime">{{ info.uptime }}</div></div>
+        <div class="info-item"><div class="label">Размер БД</div><div class="value" id="v-dbsize">{{ info.db_size }}</div></div>
+        <div class="info-item"><div class="label">Пользователей</div><div class="value" id="v-users">{{ info.total_users }}</div></div>
+        <div class="info-item"><div class="label">Записей ТО</div><div class="value" id="v-records">{{ info.total_records }}</div></div>
+        <div class="info-item"><div class="label">В корзине</div><div class="value" id="v-archive">{{ info.total_archive }}</div></div>
+        <div class="info-item"><div class="label">Инвентарь</div><div class="value" id="v-items">{{ info.total_items }}</div></div>
+        <div class="info-item"><div class="label">FAQ</div><div class="value" id="v-faq">{{ info.total_faq }}</div></div>
+        <div class="info-item"><div class="label">Серверное время</div><div class="value" id="v-time">{{ info.server_time }}</div></div>
+      </div>
+    </div>
+
+    <!-- ===== ЛОГИ ===== -->
+    <div class="card">
+      <h2>📜 Логи действий (последние 200)</h2>
+      <table>
+        <thead><tr>
+          <th style="width:160px">Время</th>
+          <th style="width:140px">Пользователь</th>
+          <th style="width:200px">Действие</th>
+          <th>Детали</th>
+          {% if can_undo %}<th style="width:130px">Откат</th>{% endif %}
+        </tr></thead>
+        <tbody>
+          {% for a in audit %}
+            <tr>
+              <td class="muted">{{ a[1] }}</td>
+              <td><b>{{ a[2] }}</b></td>
+              <td><code>{{ a[3] }}</code></td>
+              <td class="muted">{{ a[4] }}</td>
+              {% if can_undo %}
+                <td>
+                  {% if a[5] %} {# undo_kind не пустой #}
+                    <form action="/admin/undo/{{ a[0] }}" method="POST"
+                          onsubmit="return confirm('Отменить это действие?')">
+                      <button type="submit" class="btn btn-undo">Восстановить</button>
+                    </form>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== ПОЛЬЗОВАТЕЛИ ===== -->
+    <div class="card">
+      <h2>👥 Пользователи и роли</h2>
+      <table>
+        <thead><tr>
+          <th style="width:50px">ID</th>
+          <th>Логин</th>
+          <th>Роли</th>
+          <th>Создан</th>
+          <th>Последний вход</th>
+          <th style="width:40%">Изменить роли</th>
+          <th style="width:100px">Удалить</th>
+        </tr></thead>
+        <tbody id="users-body">
+          {% for u in users %}
+            <tr>
+              <td>{{ u[0] }}</td>
+              <td><b>{{ u[1] }}</b></td>
+              <td>
+                {% for r in u[2].split(',') %}
+                  {% if r %}<span class="badge {{ r }}">{{ r }}</span>{% endif %}
+                {% endfor %}
+              </td>
+              <td class="muted">{{ u[3] or '—' }}</td>
+              <td class="muted">{{ u[4] or '—' }}</td>
+              <td>
+                {% if u[0] == session.user_id %}
+                  <span class="muted">это вы</span>
+                {% else %}
+                  <form action="/admin/roles/{{ u[0] }}" method="POST" class="roles-form">
+                    {% for r in all_roles %}
+                      <label>
+                        <input type="checkbox" name="roles" value="{{ r }}"
+                               {% if r in u[2].split(',') %}checked{% endif %}>
+                        {{ r }}
+                      </label>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-save">OK</button>
+                  </form>
+                {% endif %}
+              </td>
+              <td>
+                <form action="/admin/delete/{{ u[0] }}" method="POST"
+                      onsubmit="return confirm('Удалить пользователя?')">
+                  <button type="submit" class="btn btn-delete"
+                          {% if u[0] == session.user_id %}disabled{% endif %}>Удалить</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    async function refresh() {
+      try {
+        const r = await fetch('/admin/api/data');
+        if (!r.ok) return;
+        const d = await r.json();
+        document.getElementById('v-uptime').textContent  = d.info.uptime;
+        document.getElementById('v-dbsize').textContent  = d.info.db_size;
+        document.getElementById('v-users').textContent   = d.info.total_users;
+        document.getElementById('v-records').textContent = d.info.total_records;
+        document.getElementById('v-archive').textContent = d.info.total_archive;
+        document.getElementById('v-items').textContent   = d.info.total_items;
+        document.getElementById('v-faq').textContent     = d.info.total_faq;
+        document.getElementById('v-time').textContent    = d.server_time;
+      } catch (e) { console.warn(e); }
+    }
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

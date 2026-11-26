@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>FAQ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: white; padding: 15px 20px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; font-size: 14px;
+    }
+    .topbar a { color: #007bff; text-decoration: none; margin-left: 10px; }
+    .card {
+      background: white; padding: 25px; border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px;
+    }
+    h1 { color: #333; margin-bottom: 15px; }
+    .faq-item {
+      border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 12px;
+    }
+    .faq-item .q { font-weight: bold; color: #222; margin-bottom: 8px; font-size: 15px; }
+    .faq-item .a { color: #444; white-space: pre-wrap; margin-bottom: 8px; font-size: 14px; }
+    .faq-item .meta { font-size: 11px; color: #999; }
+    .message { padding:10px 15px; margin-bottom:15px; border-radius:5px; font-size:14px; }
+    .message.error   { background:#ffe0e0; color:#b30000; }
+    .message.success { background:#e0ffe0; color:#007700; }
+    input[type=text], textarea {
+      width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;
+      font-size:13px; font-family:inherit;
+    }
+    textarea { min-height:80px; resize:vertical; }
+    .btn { padding:6px 12px; border:none; border-radius:4px; cursor:pointer; font-size:13px; color:white; }
+    .btn-save   { background:#28a745; }
+    .btn-delete { background:#dc3545; }
+    .btn:hover  { opacity: 0.9; }
+    .muted { color:#999; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <span><b>{{ session.username }}</b></span>
+      <span>
+        {% if 'admin' in session.roles or 'super_admin' in session.roles %}
+          <a href="/admin">🛠 Админ</a>
+        {% endif %}
+        <a href="/to">🚗 Управление ТО</a>
+        <a href="/inventory">📦 Инвентарь</a>
+        <a href="/">← Главная</a>
+        <a href="/logout">Выйти</a>
+      </span>
+    </div>
+
+    {% if request.args.get('error') %}<p class="message error">⚠️ {{ request.args.get('error') }}</p>{% endif %}
+    {% if request.args.get('ok') %}<p class="message success">✅ Готово.</p>{% endif %}
+
+    <div class="card">
+      <h1>❓ Часто задаваемые вопросы</h1>
+
+      {% if can_edit %}
+        <form action="/faq/add" method="POST" style="margin:15px 0 25px; padding:15px; background:#f8f9fa; border-radius:6px;">
+          <h3 style="margin-bottom:10px;font-size:14px;color:#555;">Добавить вопрос</h3>
+          <input type="text" name="question" placeholder="Вопрос" required style="margin-bottom:8px;">
+          <textarea name="answer" placeholder="Ответ" required></textarea>
+          <button type="submit" class="btn btn-save" style="margin-top:8px;">Добавить</button>
+        </form>
+      {% endif %}
+
+      {% if faq %}
+        {% for item in faq %}
+          <div class="faq-item">
+            {% if can_edit %}
+              <form action="/faq/update/{{ item[0] }}" method="POST">
+                <input type="text" name="question" value="{{ item[1] }}" required style="margin-bottom:8px;">
+                <textarea name="answer" required>{{ item[2] }}</textarea>
+                <div class="meta" style="margin-top:8px;">
+                  Создал: <b>{{ item[3] }}</b> · {{ item[4] }}
+                  · обновлено: {{ item[5] }}
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px;">
+                  <button type="submit" class="btn btn-save">Сохранить</button>
+                </div>
+              </form>
+              <form action="/faq/delete/{{ item[0] }}" method="POST"
+                    onsubmit="return confirm('Удалить вопрос?')" style="margin-top:6px;">
+                <button type="submit" class="btn btn-delete">Удалить</button>
+              </form>
+            {% else %}
+              <div class="q">{{ item[1] }}</div>
+              <div class="a">{{ item[2] }}</div>
+              <div class="meta">Создал: <b>{{ item[3] }}</b> · {{ item[4] }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Пока нет вопросов.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
