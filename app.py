@@ -1270,5 +1270,5 @@ if __name__ == '__main__':
     if not find_user('admin'):
         create_user('admin', 'admin123', role='super_admin')
         print('✅ Создан главный админ: логин "admin", пароль "admin123"')
-
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
